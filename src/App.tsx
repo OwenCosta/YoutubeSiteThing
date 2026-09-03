@@ -30,18 +30,41 @@ function App() {
   const handleSearch = async (query: string) => {
     if (!query.trim()) {
       setVideos([])
+      setSelectedVideo(null)
       return
     }
 
     setLoading(true)
     setError(null)
-    
+
     try {
-      // TODO: Implement YouTube API search
-      console.log('Searching for:', query)
+      // Use Vite env var VITE_YT_API_KEY (set in .env). This keeps the code simple for GitHub Pages.
+      // For production you should proxy this on a server to avoid exposing the key.
+      const API_KEY = import.meta.env.VITE_YT_API_KEY as string | undefined
+      if (!API_KEY) {
+        throw new Error('Missing YouTube API key. Set VITE_YT_API_KEY in your .env')
+      }
+
+      const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=12&q=${encodeURIComponent(
+        query
+      )}&key=${API_KEY}`
+
+      const res = await fetch(url)
+      if (!res.ok) {
+        const text = await res.text().catch(() => '')
+        throw new Error(`YouTube API error: ${res.status} ${res.statusText} ${text}`)
+      }
+
+      const data = await res.json()
+      setVideos(data.items || [])
+      if (data.items && data.items.length > 0) {
+        setSelectedVideo(data.items[0])
+      } else {
+        setSelectedVideo(null)
+      }
     } catch (err) {
-      setError('Failed to search videos. Please try again.')
-      console.error(err)
+      console.error('search error', err)
+      setError(err instanceof Error ? `Failed to search videos: ${err.message}` : 'Failed to search videos')
     } finally {
       setLoading(false)
     }
@@ -65,12 +88,16 @@ function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            {selectedVideo && <VideoPlayer video={selectedVideo} />}
+            {selectedVideo ? (
+              <VideoPlayer video={selectedVideo} />
+            ) : (
+              <div className="text-center py-8 text-gray-500">Select a video to play</div>
+            )}
           </div>
           <div className="lg:col-span-1">
-            <VideoGrid 
-              videos={videos} 
-              onSelectVideo={setSelectedVideo}
+            <VideoGrid
+              videos={videos}
+              onSelectVideo={(v) => setSelectedVideo(v)}
               isLoading={loading}
             />
           </div>
